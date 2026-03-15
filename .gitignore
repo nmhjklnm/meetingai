@@ -1,0 +1,58 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# uv
+uv.lock
+
+# Node / Frontend
+node_modules/
+frontend/dist/
+frontend/.env.local
+.next/
+
+# Audio & transcripts (large binary files)
+*.m4a
+*.mp3
+*.wav
+*.mp4
+*.webm
+audio/
+test/
+
+# Transcripts output (generated, not source)
+transcripts/
+*_transcript.json
+*_transcript.srt
+*_transcript.txt
+
+# Environment & secrets
+.env
+.env.*
+!.env.example
+
+# IDE
+.vscode/settings.json
+.idea/
+*.swp
+
+# macOS
+.DS_Store
+
+# Docker volumes
+postgres-data/
+redis-data/
+
+# Model weights (download separately)
+models/weights/
+*.pt
+*.onnx
+*.bin

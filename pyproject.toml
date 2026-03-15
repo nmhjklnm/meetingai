@@ -1,0 +1,18 @@
+[project]
+name = "transcribe-diarize"
+version = "0.1.0"
+description = "语音流式转写 + 说话人识别（并行/并发版）"
+requires-python = ">=3.11"
+dependencies = [
+    "openai>=1.68",
+    "numpy>=2.0",
+    "scipy>=1.13",
+    "scikit-learn>=1.5",
+    "tqdm>=4.66",
+]
+
+[project.scripts]
+transcribe = "transcribe_diarize:main"
+
+[dependency-groups]
+dev = ["ipython>=8.0"]
