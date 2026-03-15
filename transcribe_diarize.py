@@ -29,6 +29,10 @@ from concurrent.futures import ThreadPoolExecutor
 from functools import lru_cache
 from pathlib import Path
 
+from dotenv import load_dotenv
+
+load_dotenv()
+
 import numpy as np
 from numpy.lib.stride_tricks import as_strided
 from scipy.fft import dct as scipy_dct
@@ -36,9 +40,9 @@ from tqdm import tqdm
 from tqdm.asyncio import tqdm as atqdm
 
 # ── 配置 ──────────────────────────────────────────────────────────────────────
-BASE_URL            = "https://yunwu.ai/v1"
-API_KEY             = "REDACTED_API_KEY"
-MODEL               = "gpt-4o-transcribe"
+BASE_URL            = os.getenv("OPENAI_BASE_URL", "https://yunwu.ai/v1")
+API_KEY             = os.getenv("OPENAI_API_KEY", "")
+MODEL               = os.getenv("TRANSCRIPTION_MODEL", "gpt-4o-transcribe")
 MAX_WORKERS_DEFAULT = 5
 
 # 句末标点集合（用于判断一句是否完整）
@@ -105,7 +109,8 @@ def load_pcm(wav_path: str) -> tuple[np.ndarray, int]:
 
 
 def cut_segment(wav_path: str, start: float, end: float) -> str:
-    tmp = tempfile.mktemp(suffix=".wav")
+    fd, tmp = tempfile.mkstemp(suffix=".wav")
+    os.close(fd)
     subprocess.run(
         ["ffmpeg", "-y", "-i", wav_path,
          "-ss", str(start), "-to", str(end),
@@ -560,7 +565,7 @@ async def _transcribe_one(
     max_retries: int = 3,
 ) -> tuple[int, dict]:
     """切片 + 转写，自动重试（指数退避）"""
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     async with sem:
         last_err = ""
         for attempt in range(max_retries):
@@ -764,6 +769,12 @@ def main() -> None:
     parser.add_argument("-o", "--output", default=None,
                         help="输出文件名前缀（不含扩展名）；默认取第一个文件名")
     args = parser.parse_args()
+
+    if not API_KEY:
+        print("错误：未设置 OPENAI_API_KEY。")
+        print("请在 .env 文件中设置，或通过环境变量传入：")
+        print("  export OPENAI_API_KEY=sk-xxx")
+        sys.exit(1)
 
     multi = len(args.audio) > 1
     mode  = "并发（二阶修正）" if args.parallel else "流式（上下文 prompt）"

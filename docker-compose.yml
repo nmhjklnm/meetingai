@@ -13,8 +13,10 @@ services:
     volumes:
       - ./data/audio:/app/data/audio
     depends_on:
-      - postgres
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
 
   worker:
     build: ./backend
@@ -27,26 +29,33 @@ services:
     volumes:
       - ./data/audio:/app/data/audio
     depends_on:
-      - postgres
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
 
   frontend:
     build: ./frontend
     ports:
-      - "3000:3000"
-    environment:
-      - VITE_API_URL=http://localhost:8000
+      - "3000:80"
+    depends_on:
+      - api
 
   postgres:
     image: postgres:16-alpine
     environment:
-      - POSTGRES_USER=user
-      - POSTGRES_PASSWORD=password
-      - POSTGRES_DB=meeting_transcriber
+      - POSTGRES_USER=${POSTGRES_USER:-user}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-password}
+      - POSTGRES_DB=${POSTGRES_DB:-meeting_transcriber}
     volumes:
       - postgres-data:/var/lib/postgresql/data
     ports:
       - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-user}"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
 
   redis:
     image: redis:7-alpine
@@ -54,6 +63,11 @@ services:
       - "6379:6379"
     volumes:
       - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
 
 volumes:
   postgres-data:

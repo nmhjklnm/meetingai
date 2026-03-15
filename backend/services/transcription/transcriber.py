@@ -66,14 +66,15 @@ class TranscriptionService:
         import subprocess
 
         client = self._get_client()
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
 
         for attempt in range(retries):
             if attempt > 0:
                 await asyncio.sleep(2 ** attempt)
 
             # 剪切片段
-            tmp = tempfile.mktemp(suffix=".wav")
+            fd, tmp = tempfile.mkstemp(suffix=".wav")
+            os.close(fd)
             await loop.run_in_executor(
                 None,
                 lambda: subprocess.run(
@@ -98,8 +99,7 @@ class TranscriptionService:
                     return f"[ERROR: {exc}]"
             finally:
                 try:
-                    import os as _os
-                    _os.unlink(tmp)
+                    os.unlink(tmp)
                 except OSError:
                     pass
         return ""

@@ -11,7 +11,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
 COPY pyproject.toml uv.lock* ./
-RUN uv sync --frozen --no-dev
+RUN uv sync --no-dev
 
 COPY backend/ ./backend/
 

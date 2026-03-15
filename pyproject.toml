@@ -9,6 +9,7 @@ dependencies = [
     "scipy>=1.13",
     "scikit-learn>=1.5",
     "tqdm>=4.66",
+    "python-dotenv>=1.0",
 ]
 
 [project.scripts]
