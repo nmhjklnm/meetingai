@@ -34,7 +34,7 @@
 |------|------|------|
 | id | String (UUID) | PK |
 | title | String | 会议名称 |
-| status | Enum | draft / processing / done / failed |
+| status | Enum | draft / processing / done / failed（注：替换现有的 pending，draft 更准确描述"用户管理录音"阶段） |
 | audio_duration | Float | 合并后总时长（秒） |
 | num_speakers | Integer | 说话人数 |
 | summary | JSON | 摘要/行动项/关键词 |
@@ -91,7 +91,7 @@
 | DELETE | `/api/meetings/{id}` | 删除会议 | — | 204 |
 | POST | `/api/meetings/{id}/recordings` | 上传录音 | multipart file | Recording |
 | DELETE | `/api/meetings/{id}/recordings/{rid}` | 删除录音 | — | 204 |
-| POST | `/api/meetings/{id}/process` | 触发解析 | — | 202 |
+| POST | `/api/meetings/{id}/process` | 触发解析（draft/failed 状态可调用） | `{context?}` | 202 |
 | PATCH | `/api/meetings/{id}/speakers` | 重命名说话人 | `[{speaker_id, name}]` | Speaker[] |
 | GET | `/api/meetings/{id}/export/{fmt}` | 导出 srt/txt | — | 文件流 |
 
@@ -106,7 +106,7 @@
 ```json
 {
   "step": 4,
-  "total_steps": 6,
+  "total_steps": 6,  // 与 pipeline 表一致
   "step_name": "transcription",
   "percent": 67,
   "sub_done": 134,
@@ -118,18 +118,26 @@
 
 ---
 
-## Celery Pipeline（7 步）
+## Celery Pipeline（6 步）
 
-| 步骤 | 名称 | 操作 | 进度区间 |
-|------|------|------|---------|
-| 1 | 合并录音 | ffmpeg concat 多文件 → 16kHz mono WAV | 0-5% |
-| 2 | 语音检测 | HTTP POST → VAD 微服务 | 5-15% |
-| 3 | 说话人识别 | HTTP POST → Diarization 微服务 | 15-30% |
-| 4 | 语音转写 | 20 路并发 GPT-4o-transcribe | 30-85% |
-| 5 | 智能摘要 | GPT-4o NLP 分析 | 85-95% |
-| 6 | 保存结果 | 写入 DB + 标记 done | 95-100% |
+任务签名：`process_meeting_task(meeting_id: str)`
 
-单录音时步骤 1 仅做格式转换（无合并）。
+| 步骤 | 名称 | step_name | 操作 | 进度区间 |
+|------|------|-----------|------|---------|
+| 1 | 合并录音 | merge | 按 recording.order 排序，ffmpeg concat → `{audio_dir}/{meeting_id}_merged.wav`（16kHz mono）。单录音时仅格式转换。 | 0-5% |
+| 2 | 语音检测 | vad | HTTP POST merged WAV → VAD 微服务 `/detect` | 5-15% |
+| 3 | 说话人识别 | diarization | HTTP POST merged WAV + segments → Diarization 微服务 `/diarize` | 15-30% |
+| 4 | 语音转写 | transcription | `TranscriptionService.transcribe_batch()`，20 路并发，`on_progress` 回调更新子进度 | 30-85% |
+| 5 | 智能摘要 | nlp | `NLPService.analyze(transcript)` | 85-95% |
+| 6 | 保存结果 | save | 清除旧 segments/speakers → 批量写入 → Meeting.status='done' | 95-100% |
+
+合并后的 WAV 文件存储在 `{audio_dir}/{meeting_id}_merged.wav`，处理完成后保留（供后续导出/重处理使用）。
+
+### 失败与重试
+
+- 任何步骤失败：Meeting.status → `failed`，error_message 记录原因
+- 用户可在 UI 点击"重试"：`POST /api/meetings/{id}/process` 重新触发，清除旧结果后从步骤 1 重跑
+- 重试时 Meeting.status 从 `failed` → `processing`
 
 ---
 
@@ -295,7 +303,7 @@ Inter 字族，PingFang SC 回退。
 - `backend/api/routes/meetings.py` — 全新 REST 端点
 - `backend/api/routes/websocket.py` — 进度格式更新
 - `backend/api/main.py` — 路由注册
-- `backend/worker/tasks.py` — 7 步 pipeline（含录音合并）
+- `backend/worker/tasks.py` — 6 步 pipeline（含录音合并）
 
 ## 需要全部重写的前端
 
