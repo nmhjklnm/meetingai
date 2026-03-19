@@ -1,4 +1,6 @@
-import { Calendar, Clock, Users, Download, Share2 } from "lucide-react";
+import { useState, useRef, useEffect } from "react";
+import { Calendar, Clock, Users, Download, ChevronDown } from "lucide-react";
+import { useExport } from "../../hooks/use-export";
 import type { Meeting } from "../../types";
 
 function formatDuration(seconds: number): string {
@@ -22,13 +24,24 @@ interface DetailHeaderProps {
 }
 
 export function DetailHeader({ meeting }: DetailHeaderProps) {
-  const handleExport = () => {
-    // Export functionality will be implemented in Task 11
-  };
+  const [exportOpen, setExportOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const { download } = useExport(meeting.id);
 
-  const handleShare = () => {
-    // Share functionality will be implemented in Task 11
-  };
+  // Close dropdown on outside click
+  useEffect(() => {
+    if (!exportOpen) return;
+    function handleClick(e: MouseEvent) {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(e.target as Node)
+      ) {
+        setExportOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [exportOpen]);
 
   return (
     <div className="px-6 py-3 border-b border-border-subtle flex justify-between items-center min-h-[56px]">
@@ -56,21 +69,47 @@ export function DetailHeader({ meeting }: DetailHeaderProps) {
         </div>
       </div>
       {meeting.status === "done" && (
-        <div className="flex gap-2">
+        <div className="relative" ref={dropdownRef}>
           <button
-            onClick={handleExport}
+            onClick={() => setExportOpen(!exportOpen)}
             className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] text-text-secondary border border-border-subtle rounded-sm hover:bg-surface-hover transition-colors"
           >
             <Download size={13} />
             导出
+            <ChevronDown size={11} className="ml-0.5 opacity-50" />
           </button>
-          <button
-            onClick={handleShare}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] text-cream bg-[rgba(255,255,250,0.06)] border border-border-subtle rounded-sm hover:bg-[rgba(255,255,250,0.1)] transition-colors"
-          >
-            <Share2 size={13} />
-            分享
-          </button>
+
+          {exportOpen && (
+            <div className="absolute right-0 top-full mt-1 w-44 bg-raised border border-border-subtle rounded-sm shadow-lg z-50 py-1">
+              <button
+                onClick={() => {
+                  download("srt");
+                  setExportOpen(false);
+                }}
+                className="w-full text-left px-3 py-2 text-[12px] text-text-secondary hover:bg-surface-hover hover:text-text-primary transition-colors"
+              >
+                逐字稿 (SRT)
+              </button>
+              <button
+                onClick={() => {
+                  download("txt");
+                  setExportOpen(false);
+                }}
+                className="w-full text-left px-3 py-2 text-[12px] text-text-secondary hover:bg-surface-hover hover:text-text-primary transition-colors"
+              >
+                逐字稿 (TXT)
+              </button>
+              <button
+                onClick={() => {
+                  download("summary");
+                  setExportOpen(false);
+                }}
+                className="w-full text-left px-3 py-2 text-[12px] text-text-secondary hover:bg-surface-hover hover:text-text-primary transition-colors"
+              >
+                会议纪要
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>
