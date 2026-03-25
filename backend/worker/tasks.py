@@ -94,6 +94,12 @@ def _report(
 
 # ── 工具函数 ──────────────────────────────────────────────────────────────────
 
+def _fmt_ts(seconds: float) -> str:
+    """秒数 → [MM:SS] 格式"""
+    m, s = divmod(int(seconds), 60)
+    return f"[{m:02d}:{s:02d}]"
+
+
 def _get_audio_duration(wav_path: str) -> float:
     """读取 WAV 时长（秒）"""
     import wave
@@ -330,7 +336,7 @@ def process_meeting_task(
         _report(meeting_id, 5, TOTAL_STEPS, "nlp", "AI 摘要生成", eta_seconds=30)
 
         full_transcript = "\n".join(
-            f"{r['speaker']}: {r.get('text', '')}"
+            f"{_fmt_ts(r['start'])} {r['speaker']}: {r.get('text', '')}"
             for r in transcribed
             if r.get("text") and "[ERROR" not in r.get("text", "")
         )
@@ -402,8 +408,152 @@ def process_meeting_task(
         })
         return {"status": "done", "meeting_id": meeting_id}
 
-    except Exception as exc:
+    except Exception as exc:  # noqa: E722
         import traceback
         err_msg = f"{type(exc).__name__}: {exc}\n{traceback.format_exc()[-800:]}"
         _fail(err_msg)
         return {"status": "failed", "error": str(exc)}
+
+
+# ── 辅助：构建带时间戳的全文 ─────────────────────────────────────────────────
+
+def _build_transcript(meeting_id: str) -> tuple[str, dict]:
+    """从 DB 读取 segments + speakers，构建带时间戳的全文。返回 (transcript, spk_map)。"""
+    from backend.core.database import get_session_factory
+    from backend.models.meeting import Meeting, Segment
+
+    factory = get_session_factory()
+    db = factory()
+    try:
+        meeting = db.get(Meeting, meeting_id)
+        if not meeting:
+            return "", {}
+        spk_map = {s.speaker_id: s.name for s in meeting.speakers}
+        segments = db.query(Segment).filter(
+            Segment.meeting_id == meeting_id
+        ).order_by(Segment.start).all()
+
+        transcript = "\n".join(
+            f"{_fmt_ts(seg.start)} {spk_map.get(seg.speaker_id, seg.speaker_id)}: {seg.text}"
+            for seg in segments
+            if seg.text and "[ERROR" not in seg.text
+        )
+        return transcript, spk_map
+    finally:
+        db.close()
+
+
+# ── 重新生成时间轴 ───────────────────────────────────────────────────────────
+
+TIMELINE_PROMPT = """\
+你是一位会议记录分析助手。请根据以下带时间戳的会议转录文本，提炼出会议的 **Topic 时间轴**（议题主线）。
+
+要求：
+- 按时间顺序列出会议中讨论的各个 topic（议题/话题）
+- 每个 topic 用一句话概括核心内容，体现这一阶段在聊什么
+- 相邻时间如果在聊同一个话题则合并，不要重复
+- 覆盖整个会议时长，不遗漏重要议题转换点
+- 通常 5-15 个节点（视会议长度而定）
+- time 字段为该 topic 开始的秒数（从转录文本的 [MM:SS] 时间标记推算）
+
+转录文本：
+{transcript}
+
+请用 JSON 格式返回：
+{{"timeline": [{{"time": 0, "title": "该阶段讨论的核心话题"}}]}}
+"""
+
+
+SUMMARY_ONLY_PROMPT = """\
+你是一位会议记录整理助手。请根据以下会议转录文本，完成以下任务：
+
+1. **整体摘要**（200字以内）：概括会议核心议题和结论
+2. **各说话人发言要点**：每位说话人 3-5 条要点
+3. **行动项**：列出所有明确的任务、承诺或下一步行动，注明负责人
+4. **关键词**：5-10 个会议相关关键词
+
+转录文本：
+{transcript}
+
+请用 JSON 格式返回：
+{{
+  "summary": "...",
+  "speakers": {{"说话人名": ["要点1", "要点2"], ...}},
+  "action_items": [{{"assignee": "...", "task": "...", "deadline": "..."}}],
+  "keywords": ["...", "..."]
+}}
+"""
+
+
+def _run_regen(
+    meeting_id: str,
+    tag: str,
+    prompt: str,
+    merge_fn,  # (old_summary: dict, ai_result: dict) -> dict
+    chat_model: str | None = None,
+    api_key: str | None = None,
+    base_url: str | None = None,
+) -> dict:
+    """共享的重新生成逻辑：调 AI → 合并写入 DB → 更新进度。"""
+    import json as _json
+    from backend.core.database import get_session_factory
+    from backend.models.meeting import Meeting
+    from openai import OpenAI
+
+    set_progress(meeting_id, {
+        "message": f"正在生成{tag}...", "percent": 20, "status": "processing",
+    }, suffix=tag)
+
+    transcript, _ = _build_transcript(meeting_id)
+    if not transcript.strip():
+        set_progress(meeting_id, {"status": "done", "message": "无转录文本", "percent": 100}, suffix=tag)
+        return {"status": "failed", "reason": "empty transcript"}
+
+    client = OpenAI(
+        base_url=base_url or settings.openai_base_url,
+        api_key=api_key or settings.openai_api_key,
+    )
+    try:
+        resp = client.chat.completions.create(
+            model=chat_model or settings.chat_model,
+            messages=[{"role": "user", "content": prompt.format(transcript=transcript)}],
+            response_format={"type": "json_object"},
+        )
+        ai_result = _json.loads(resp.choices[0].message.content)
+    except Exception as e:
+        set_progress(meeting_id, {"status": "done", "message": f"失败: {e}", "percent": 100}, suffix=tag)
+        return {"status": "failed", "error": str(e)}
+
+    factory = get_session_factory()
+    db = factory()
+    try:
+        meeting = db.get(Meeting, meeting_id)
+        if meeting:
+            meeting.summary = merge_fn(dict(meeting.summary or {}), ai_result)
+            db.commit()
+    finally:
+        db.close()
+
+    set_progress(meeting_id, {"status": "done", "message": f"{tag}已更新！", "percent": 100}, suffix=tag)
+    return {"status": "done", "meeting_id": meeting_id}
+
+
+@celery_app.task(bind=True, name="backend.worker.tasks.regenerate_timeline_task")
+def regenerate_timeline_task(self, meeting_id: str, chat_model: str | None = None,
+                             api_key: str | None = None, base_url: str | None = None) -> dict:
+    def merge(old, new):
+        old["timeline"] = new.get("timeline", [])
+        return old
+    return _run_regen(meeting_id, "时间轴", TIMELINE_PROMPT, merge, chat_model, api_key, base_url)
+
+
+@celery_app.task(bind=True, name="backend.worker.tasks.regenerate_summary_task")
+def regenerate_summary_task(self, meeting_id: str, chat_model: str | None = None,
+                            api_key: str | None = None, base_url: str | None = None) -> dict:
+    def merge(old, new):
+        # 保留时间轴不变
+        tl = old.get("timeline")
+        if tl:
+            new["timeline"] = tl
+        return new
+    return _run_regen(meeting_id, "纪要", SUMMARY_ONLY_PROMPT, merge, chat_model, api_key, base_url)

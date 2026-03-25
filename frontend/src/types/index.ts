@@ -40,8 +40,14 @@ export interface ActionItem {
   deadline?: string;
 }
 
+export interface TimelineEntry {
+  time: number;
+  title: string;
+}
+
 export interface Summary {
   summary?: string;
+  timeline?: TimelineEntry[];
   speakers?: Record<string, string[]>;
   action_items?: ActionItem[];
   keywords?: string[];

@@ -45,8 +45,10 @@ app.add_middleware(
 # ── 路由注册 ──────────────────────────────────────────────────────────────────
 from backend.api.routes.meetings import router as meetings_router  # noqa: E402
 from backend.api.routes.websocket import router as ws_router       # noqa: E402
+from backend.api.routes.system import router as system_router       # noqa: E402
 
 app.include_router(meetings_router, prefix="/api/meetings", tags=["meetings"])
+app.include_router(system_router, prefix="/api", tags=["system"])
 app.include_router(ws_router, tags=["websocket"])
 
 

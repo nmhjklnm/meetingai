@@ -1,9 +1,59 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { formatDuration } from "../../lib/utils";
 import { SearchInput } from "../ui/search-input";
 import type { MeetingListItem, MeetingStatus } from "../../types";
+
+function DeleteConfirm({
+  title,
+  onConfirm,
+  onCancel,
+}: {
+  title: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const onClick = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) onCancel();
+    };
+    document.addEventListener("mousedown", onClick);
+    return () => document.removeEventListener("mousedown", onClick);
+  }, [onCancel]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[rgb(var(--neutral)_/_0.3)]">
+      <div
+        ref={ref}
+        className="bg-raised border border-border-subtle rounded-lg shadow-xl p-5 w-[300px] space-y-4"
+      >
+        <div className="text-[14px] text-text-primary font-medium">
+          确定删除？
+        </div>
+        <div className="text-[12px] text-text-secondary leading-relaxed">
+          「{title}」及其所有录音和转写结果将被永久删除，无法恢复。
+        </div>
+        <div className="flex gap-2 justify-end">
+          <button
+            onClick={onCancel}
+            className="px-3 py-1.5 text-[12px] text-text-secondary border border-border-subtle rounded-sm hover:bg-surface-hover transition-colors"
+          >
+            取消
+          </button>
+          <button
+            onClick={onConfirm}
+            className="px-3 py-1.5 text-[12px] text-[#fff] bg-[rgb(220_50_50_/_0.8)] hover:bg-[rgb(220_50_50_/_0.9)] rounded-sm transition-colors"
+          >
+            删除
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 interface MeetingListProps {
   meetings: MeetingListItem[];
@@ -46,6 +96,7 @@ export function MeetingList({
   onDelete,
 }: MeetingListProps) {
   const [search, setSearch] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState<MeetingListItem | null>(null);
   const filtered = search
     ? meetings.filter((m) =>
         m.title.toLowerCase().includes(search.toLowerCase()),
@@ -107,7 +158,7 @@ export function MeetingList({
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    if (confirm(`确定删除「${m.title}」？`)) onDelete(m.id);
+                    setDeleteTarget(m);
                   }}
                   className="hidden group-hover:grid w-5 h-5 place-items-center shrink-0 ml-2 rounded text-text-muted hover:text-error hover:bg-[rgb(var(--fg)_/_0.06)] transition-colors"
                   title="删除会议"
@@ -122,6 +173,17 @@ export function MeetingList({
           );
         })}
       </div>
+
+      {deleteTarget && (
+        <DeleteConfirm
+          title={deleteTarget.title}
+          onConfirm={() => {
+            onDelete(deleteTarget.id);
+            setDeleteTarget(null);
+          }}
+          onCancel={() => setDeleteTarget(null)}
+        />
+      )}
     </div>
   );
 }

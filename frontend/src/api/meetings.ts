@@ -55,6 +55,20 @@ export const meetingsApi = {
       .then(() => undefined);
   },
 
+  regenerateTimeline(
+    meetingId: string,
+    opts?: { chat_model?: string; api_key?: string; base_url?: string },
+  ): Promise<void> {
+    return api.post(`/meetings/${meetingId}/regenerate-timeline`, opts || {}).then(() => undefined);
+  },
+
+  regenerateSummary(
+    meetingId: string,
+    opts?: { chat_model?: string; api_key?: string; base_url?: string },
+  ): Promise<void> {
+    return api.post(`/meetings/${meetingId}/regenerate-summary`, opts || {}).then(() => undefined);
+  },
+
   updateSpeakers(
     meetingId: string,
     speakers: Speaker[]
@@ -66,5 +80,21 @@ export const meetingsApi = {
 
   exportUrl(meetingId: string, format: "srt" | "txt" | "summary"): string {
     return `${BASE_URL}/meetings/${meetingId}/export/${format}`;
+  },
+
+  getProgress(meetingId: string, suffix?: string): Promise<{ status: string; message?: string }> {
+    const params = suffix ? { suffix } : {};
+    return api.get(`/progress/${meetingId}`, { params }).then((r) => r.data);
+  },
+
+  checkModel(
+    model: string,
+    apiKey?: string,
+    baseUrl?: string,
+  ): Promise<{ available: boolean; error?: string; warning?: string }> {
+    const body: Record<string, string> = { model };
+    if (apiKey) body.api_key = apiKey;
+    if (baseUrl) body.base_url = baseUrl;
+    return api.post("/check-model", body).then((r) => r.data);
   },
 };

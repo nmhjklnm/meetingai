@@ -53,6 +53,12 @@ class ProcessRequest(BaseModel):
     base_url: Optional[str] = None
 
 
+class RegenRequest(BaseModel):
+    chat_model: Optional[str] = None
+    api_key: Optional[str] = None
+    base_url: Optional[str] = None
+
+
 class SpeakerUpdateItem(BaseModel):
     speaker_id: str
     name: str
@@ -438,6 +444,56 @@ def start_processing(
     )
 
     return {"id": meeting_id, "status": "processing"}
+
+
+def _require_done(meeting_id: str, db: Session) -> Meeting:
+    meeting = _get_meeting_or_404(meeting_id, db)
+    if meeting.status != "done":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"只能对已完成的会议执行此操作（当前状态: {meeting.status}）",
+        )
+    return meeting
+
+
+# POST /api/meetings/{id}/regenerate-timeline — Regenerate timeline only
+@router.post("/{meeting_id}/regenerate-timeline", status_code=status.HTTP_202_ACCEPTED)
+def regenerate_timeline(
+    meeting_id: str,
+    body: RegenRequest = RegenRequest(),
+    db: Session = Depends(get_db),
+):
+    """重新生成时间轴"""
+    _require_done(meeting_id, db)
+
+    from backend.core.redis_client import set_progress
+    set_progress(meeting_id, {
+        "message": "正在生成时间轴...", "percent": 10, "status": "processing",
+    }, suffix="timeline")
+
+    from backend.worker.tasks import regenerate_timeline_task
+    regenerate_timeline_task.delay(meeting_id, body.chat_model, body.api_key, body.base_url)
+    return {"id": meeting_id, "status": "regenerating"}
+
+
+# POST /api/meetings/{id}/regenerate-summary — Regenerate summary only
+@router.post("/{meeting_id}/regenerate-summary", status_code=status.HTTP_202_ACCEPTED)
+def regenerate_summary(
+    meeting_id: str,
+    body: RegenRequest = RegenRequest(),
+    db: Session = Depends(get_db),
+):
+    """重新生成纪要（摘要/关键词/行动项）"""
+    _require_done(meeting_id, db)
+
+    from backend.core.redis_client import set_progress
+    set_progress(meeting_id, {
+        "message": "正在生成纪要...", "percent": 10, "status": "processing",
+    }, suffix="summary")
+
+    from backend.worker.tasks import regenerate_summary_task
+    regenerate_summary_task.delay(meeting_id, body.chat_model, body.api_key, body.base_url)
+    return {"id": meeting_id, "status": "regenerating"}
 
 
 # PATCH /api/meetings/{id}/speakers — Rename speakers
