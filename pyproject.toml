@@ -1,19 +1,50 @@
 [project]
-name = "transcribe-diarize"
+name = "meeting-transcriber"
 version = "0.1.0"
-description = "语音流式转写 + 说话人识别（并行/并发版）"
+description = "会议语音转写 + 说话人分离 + 智能摘要"
 requires-python = ">=3.11"
 dependencies = [
+    # AI / Audio — 核心
     "openai>=1.68",
     "numpy>=2.0",
     "scipy>=1.13",
     "scikit-learn>=1.5",
     "tqdm>=4.66",
     "python-dotenv>=1.0",
+    # 神经网络模型（VAD + 说话人分离，在 ML 微服务中使用）
+    "funasr>=1.1.0",
+    "torch>=2.0",           # funasr 不硬依赖 torch，需显式声明
+    "torchaudio>=2.0",
+    "soundfile>=0.12.1",
+    "modelscope>=1.9.5",    # ModelScope 模型下载 & pipeline
+    "addict>=2.4",          # modelscope 依赖
+    "datasets>=2.0",        # modelscope 依赖
+    "simplejson>=3.0",      # modelscope 依赖
+    "sortedcontainers>=2.4",# modelscope 依赖
+    "Pillow>=10.0",         # modelscope 依赖
+    # Web framework
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "python-multipart>=0.0.9",
+    "websockets>=13.0",
+    "httpx>=0.27",          # Worker 调用 ML 微服务
+    # Async task queue
+    "celery[redis]>=5.4",
+    # Database
+    "sqlalchemy>=2.0",
+    "alembic>=1.13",
+    "psycopg2-binary>=2.9", # PostgreSQL（生产环境）
+    # Config & utilities
+    "pydantic-settings>=2.5",
+    "aiofiles>=24.1",
 ]
-
-[project.scripts]
-transcribe = "transcribe_diarize:main"
 
 [dependency-groups]
 dev = ["ipython>=8.0"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["backend", "ml_services"]
