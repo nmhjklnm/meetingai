@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus } from "lucide-react";
+import { Plus, Trash2 } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { formatDuration } from "../../lib/utils";
 import { SearchInput } from "../ui/search-input";
@@ -10,12 +10,13 @@ interface MeetingListProps {
   selectedId?: string;
   onSelect: (id: string) => void;
   onCreate: () => void;
+  onDelete: (id: string) => void;
 }
 
 const statusDot: Record<MeetingStatus, string> = {
-  done: "bg-[rgba(255,255,250,0.7)] shadow-[0_0_6px_rgba(255,255,250,0.2)]",
-  processing: "bg-[rgba(255,255,250,0.4)] animate-pulse",
-  draft: "bg-[rgba(255,255,250,0.2)]",
+  done: "bg-[rgb(var(--fg)_/_0.7)] shadow-[0_0_6px_rgb(var(--fg)_/_0.2)]",
+  processing: "bg-[rgb(var(--fg)_/_0.4)] animate-pulse",
+  draft: "bg-[rgb(var(--fg)_/_0.2)]",
   failed: "bg-error",
 };
 
@@ -42,6 +43,7 @@ export function MeetingList({
   selectedId,
   onSelect,
   onCreate,
+  onDelete,
 }: MeetingListProps) {
   const [search, setSearch] = useState("");
   const filtered = search
@@ -51,7 +53,7 @@ export function MeetingList({
     : meetings;
 
   return (
-    <div className="w-[264px] bg-[rgba(255,255,255,0.01)] border-r border-border-subtle flex flex-col shrink-0">
+    <div className="w-[264px] bg-[rgb(var(--neutral)_/_0.01)] border-r border-border-subtle flex flex-col shrink-0">
       {/* Header */}
       <div className="px-4 pt-4 pb-3 flex justify-between items-center">
         <span className="text-[15px] font-medium text-text-primary">
@@ -59,10 +61,10 @@ export function MeetingList({
         </span>
         <button
           onClick={onCreate}
-          className="w-7 h-7 rounded-sm bg-[rgba(255,255,250,0.08)] grid place-items-center cursor-pointer hover:bg-[rgba(255,255,250,0.12)] transition-colors"
+          className="w-7 h-7 rounded-sm bg-[rgb(var(--fg)_/_0.08)] grid place-items-center cursor-pointer hover:bg-[rgb(var(--fg)_/_0.12)] transition-colors"
         >
           <Plus
-            className="w-3 h-3 text-[rgba(255,255,250,0.8)]"
+            className="w-3 h-3 text-[rgb(var(--fg)_/_0.8)]"
             strokeWidth={2.5}
           />
         </button>
@@ -86,24 +88,34 @@ export function MeetingList({
               key={m.id}
               onClick={() => onSelect(m.id)}
               className={cn(
-                "px-3 py-3 rounded-md mb-0.5 cursor-pointer transition-colors border",
+                "group px-3 py-3 rounded-md mb-0.5 cursor-pointer transition-colors border relative",
                 active
-                  ? "bg-[rgba(255,255,255,0.025)] border-[rgba(255,255,255,0.04)]"
-                  : "border-transparent hover:bg-[rgba(255,255,255,0.015)]",
+                  ? "bg-[rgb(var(--neutral)_/_0.025)] border-[rgb(var(--neutral)_/_0.04)]"
+                  : "border-transparent hover:bg-[rgb(var(--neutral)_/_0.015)]",
               )}
             >
               <div className="flex items-center justify-between mb-1">
-                <span className="text-[13px] font-medium text-[rgba(255,255,250,0.8)] truncate">
+                <span className="text-[13px] font-medium text-[rgb(var(--fg)_/_0.8)] truncate pr-5">
                   {m.title}
                 </span>
                 <span
                   className={cn(
-                    "w-[5px] h-[5px] rounded-full shrink-0 ml-2",
+                    "w-[5px] h-[5px] rounded-full shrink-0 ml-2 group-hover:hidden",
                     statusDot[m.status],
                   )}
                 />
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (confirm(`确定删除「${m.title}」？`)) onDelete(m.id);
+                  }}
+                  className="hidden group-hover:grid w-5 h-5 place-items-center shrink-0 ml-2 rounded text-text-muted hover:text-error hover:bg-[rgb(var(--fg)_/_0.06)] transition-colors"
+                  title="删除会议"
+                >
+                  <Trash2 size={12} />
+                </button>
               </div>
-              <div className="text-[11px] text-[rgba(255,255,250,0.2)]">
+              <div className="text-[11px] text-[rgb(var(--fg)_/_0.2)]">
                 {buildMeta(m)}
               </div>
             </div>

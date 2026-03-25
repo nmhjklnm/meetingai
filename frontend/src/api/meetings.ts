@@ -36,9 +36,22 @@ export const meetingsApi = {
       .then(() => undefined);
   },
 
-  startProcessing(meetingId: string, context?: string): Promise<void> {
+  updateTitle(meetingId: string, title: string): Promise<void> {
+    return api.patch(`/meetings/${meetingId}`, { title }).then(() => undefined);
+  },
+
+  startProcessing(
+    meetingId: string,
+    opts?: {
+      context?: string;
+      chat_model?: string;
+      transcription_model?: string;
+      api_key?: string;
+      base_url?: string;
+    },
+  ): Promise<void> {
     return api
-      .post(`/meetings/${meetingId}/process`, context ? { context } : {})
+      .post(`/meetings/${meetingId}/process`, opts || {})
       .then(() => undefined);
   },
 

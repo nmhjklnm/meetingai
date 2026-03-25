@@ -2,6 +2,7 @@ import { useState } from "react";
 import { AlertCircle } from "lucide-react";
 import { Button } from "../ui/button";
 import { useStartProcessing } from "../../hooks/use-meetings";
+import { useSettings } from "../../contexts/settings";
 import type { Meeting } from "../../types";
 
 interface FailedViewProps {
@@ -10,6 +11,7 @@ interface FailedViewProps {
 
 export function FailedView({ meeting }: FailedViewProps) {
   const startMutation = useStartProcessing(meeting.id);
+  const { settings } = useSettings();
   const [expanded, setExpanded] = useState(false);
 
   const errorMessage = meeting.error_message || "未知错误";
@@ -38,7 +40,12 @@ export function FailedView({ meeting }: FailedViewProps) {
 
         <Button
           variant="primary"
-          onClick={() => startMutation.mutate(undefined)}
+          onClick={() => startMutation.mutate({
+            chat_model: settings.chatModel,
+            transcription_model: settings.transcriptionModel,
+            ...(settings.apiKey ? { api_key: settings.apiKey } : {}),
+            ...(settings.baseUrl ? { base_url: settings.baseUrl } : {}),
+          })}
           disabled={startMutation.isPending}
           className="mt-2"
         >

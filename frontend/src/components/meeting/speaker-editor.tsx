@@ -52,7 +52,7 @@ function InlineEdit({ speaker, onSave, saving }: InlineEditProps) {
           onKeyDown={handleKeyDown}
           onBlur={handleSave}
           disabled={saving}
-          className="bg-[rgba(255,255,255,0.03)] border border-border-focus rounded-sm px-2 py-1 text-[12px] text-text-primary outline-none w-32"
+          className="bg-surface-hover border border-border-focus rounded-sm px-2 py-1 text-[12px] text-text-primary outline-none w-32"
         />
         <button
           onClick={handleSave}
@@ -74,7 +74,7 @@ function InlineEdit({ speaker, onSave, saving }: InlineEditProps) {
   return (
     <span
       onClick={() => setEditing(true)}
-      className="text-[12px] text-text-secondary cursor-pointer hover:text-text-primary transition-colors border-b border-dashed border-[rgba(255,255,250,0.1)] hover:border-[rgba(255,255,250,0.25)]"
+      className="text-[12px] text-text-secondary cursor-pointer hover:text-text-primary transition-colors border-b border-dashed border-[rgb(var(--fg)_/_0.1)] hover:border-[rgb(var(--fg)_/_0.25)]"
     >
       {speaker.name}
     </span>
@@ -114,10 +114,10 @@ export function SpeakerEditor({ meeting }: SpeakerEditorProps) {
         {meeting.speakers.map((speaker) => (
           <div
             key={speaker.speaker_id}
-            className="flex items-center gap-3 px-3 py-2 rounded-sm bg-[rgba(255,255,255,0.015)] border border-border-subtle"
+            className="flex items-center gap-3 px-3 py-2 rounded-sm bg-[rgb(var(--neutral)_/_0.015)] border border-border-subtle"
           >
-            <div className="w-6 h-6 rounded-full bg-[rgba(255,255,250,0.04)] border border-[rgba(255,255,250,0.06)] flex items-center justify-center text-[10px] font-semibold text-text-secondary shrink-0">
-              {speaker.speaker_id.replace("SPEAKER_", "S")}
+            <div className="w-6 h-6 rounded-full bg-surface-active border border-[rgb(var(--fg)_/_0.06)] flex items-center justify-center text-[10px] font-semibold text-text-secondary shrink-0">
+              {speaker.speaker_id.replace(/^Speaker\s*/i, "").replace(/^SPEAKER_/i, "S")}
             </div>
             <InlineEdit
               speaker={speaker}

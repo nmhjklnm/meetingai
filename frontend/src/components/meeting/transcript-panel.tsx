@@ -5,10 +5,10 @@ import { formatTime } from "../../lib/utils";
 import type { Meeting } from "../../types";
 
 const SPEAKER_STYLES = [
-  { bg: "rgba(255,255,250,0.04)", text: "rgba(255,255,250,0.5)", border: "rgba(255,255,250,0.06)" },
-  { bg: "rgba(255,255,250,0.025)", text: "rgba(255,255,250,0.35)", border: "rgba(255,255,250,0.04)" },
-  { bg: "rgba(255,255,250,0.05)", text: "rgba(255,255,250,0.55)", border: "rgba(255,255,250,0.07)" },
-  { bg: "rgba(255,255,250,0.02)", text: "rgba(255,255,250,0.3)", border: "rgba(255,255,250,0.03)" },
+  { bg: "rgb(var(--fg) / 0.04)", text: "rgb(var(--fg) / 0.5)", border: "rgb(var(--fg) / 0.06)" },
+  { bg: "rgb(var(--fg) / 0.025)", text: "rgb(var(--fg) / 0.35)", border: "rgb(var(--fg) / 0.04)" },
+  { bg: "rgb(var(--fg) / 0.05)", text: "rgb(var(--fg) / 0.55)", border: "rgb(var(--fg) / 0.07)" },
+  { bg: "rgb(var(--fg) / 0.02)", text: "rgb(var(--fg) / 0.3)", border: "rgb(var(--fg) / 0.03)" },
 ];
 
 function getInitials(name: string): string {

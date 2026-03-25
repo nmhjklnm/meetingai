@@ -19,6 +19,11 @@ export function useMeeting(id: string | undefined) {
     queryKey: ["meeting", id],
     queryFn: () => meetingsApi.get(id!),
     enabled: !!id,
+    refetchInterval: (query) => {
+      const data = query.state.data;
+      if (data && data.status === "processing") return 5000;
+      return false;
+    },
   });
 }
 
@@ -61,11 +66,28 @@ export function useDeleteRecording(meetingId: string) {
   });
 }
 
+export function useUpdateTitle(meetingId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (title: string) => meetingsApi.updateTitle(meetingId, title),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["meeting", meetingId] });
+      qc.invalidateQueries({ queryKey: ["meetings"] });
+    },
+  });
+}
+
 export function useStartProcessing(meetingId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (context?: string | void) =>
-      meetingsApi.startProcessing(meetingId, context || undefined),
+    mutationFn: (opts?: {
+      context?: string;
+      chat_model?: string;
+      transcription_model?: string;
+      api_key?: string;
+      base_url?: string;
+    } | void) =>
+      meetingsApi.startProcessing(meetingId, opts || undefined),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["meeting", meetingId] });
       qc.invalidateQueries({ queryKey: ["meetings"] });

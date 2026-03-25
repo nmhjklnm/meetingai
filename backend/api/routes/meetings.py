@@ -41,8 +41,16 @@ class CreateMeetingRequest(BaseModel):
     title: str = "未命名会议"
 
 
+class UpdateMeetingRequest(BaseModel):
+    title: Optional[str] = None
+
+
 class ProcessRequest(BaseModel):
     context: Optional[str] = None
+    chat_model: Optional[str] = None
+    transcription_model: Optional[str] = None
+    api_key: Optional[str] = None
+    base_url: Optional[str] = None
 
 
 class SpeakerUpdateItem(BaseModel):
@@ -250,6 +258,21 @@ def get_meeting(meeting_id: str, db: Session = Depends(get_db)):
     return _build_meeting_out(meeting)
 
 
+# PATCH /api/meetings/{id} — Update meeting
+@router.patch("/{meeting_id}")
+def update_meeting(
+    meeting_id: str,
+    body: UpdateMeetingRequest,
+    db: Session = Depends(get_db),
+):
+    """更新会议信息（标题等）"""
+    meeting = _get_meeting_or_404(meeting_id, db)
+    if body.title is not None:
+        meeting.title = body.title.strip() or meeting.title
+    db.commit()
+    return _build_meeting_out(meeting)
+
+
 # DELETE /api/meetings/{id} — Delete meeting
 @router.delete("/{meeting_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_meeting(meeting_id: str, db: Session = Depends(get_db)):
@@ -405,7 +428,14 @@ def start_processing(
 
     # Submit Celery task
     from backend.worker.tasks import process_meeting_task
-    process_meeting_task.delay(meeting_id, body.context)
+    process_meeting_task.delay(
+        meeting_id,
+        body.context,
+        body.chat_model,
+        body.transcription_model,
+        body.api_key,
+        body.base_url,
+    )
 
     return {"id": meeting_id, "status": "processing"}
 

@@ -3,39 +3,53 @@ FastAPI 主应用
 ==============
 REST API + WebSocket 实时进度推送
 """
+from __future__ import annotations
+
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # 启动时自动建表（首次部署无需手动迁移）
+    from backend.core.database import Base, get_engine
+    import backend.models  # noqa: F401 — 触发模型注册
+    engine = get_engine()
+    Base.metadata.create_all(bind=engine)
+
+    # 确保音频目录存在
+    from pathlib import Path
+    from backend.core.config import get_settings
+    Path(get_settings().audio_dir).mkdir(parents=True, exist_ok=True)
+
+    yield
+
+
 app = FastAPI(
     title="Meeting Transcriber API",
     description="会议语音转写 + 说话人分离 + 智能摘要",
-    version="0.1.0",
+    version="1.0.0",
+    lifespan=lifespan,
 )
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=["*"],  # 生产环境请改为具体域名
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+# ── 路由注册 ──────────────────────────────────────────────────────────────────
+from backend.api.routes.meetings import router as meetings_router  # noqa: E402
+from backend.api.routes.websocket import router as ws_router       # noqa: E402
 
-# ── 路由注册（TODO: 实现各路由） ──────────────────────────────────────────────
+app.include_router(meetings_router, prefix="/api/meetings", tags=["meetings"])
+app.include_router(ws_router, tags=["websocket"])
 
-@app.get("/health")
+
+@app.get("/health", tags=["health"])
 async def health():
-    return {"status": "ok"}
-
-
-# POST   /api/meetings              上传音频，创建转写任务
-# GET    /api/meetings              获取历史会议列表
-# GET    /api/meetings/{id}         获取会议详情 + 转录结果
-# GET    /api/meetings/{id}/summary 获取 AI 摘要
-# PATCH  /api/meetings/{id}/speakers 更新说话人姓名映射
-# DELETE /api/meetings/{id}         删除会议
-# WS     /ws/meetings/{id}/progress 实时转写进度推送
-
-# TODO: from .routes import meetings, speakers, export
-# app.include_router(meetings.router, prefix="/api/meetings")
+    return {"status": "ok", "version": "1.0.0"}

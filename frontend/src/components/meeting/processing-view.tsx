@@ -44,16 +44,16 @@ interface StepCircleProps {
 function StepCircle({ index, state }: StepCircleProps) {
   if (state === "done") {
     return (
-      <div className="w-6 h-6 rounded-full flex items-center justify-center bg-[rgba(255,255,250,0.06)] border border-[rgba(255,255,250,0.1)]">
-        <Check size={12} className="text-[rgba(255,255,250,0.6)]" />
+      <div className="w-6 h-6 rounded-full flex items-center justify-center bg-[rgb(var(--fg)_/_0.06)] border border-[rgb(var(--fg)_/_0.1)]">
+        <Check size={12} className="text-[rgb(var(--fg)_/_0.6)]" />
       </div>
     );
   }
 
   if (state === "current") {
     return (
-      <div className="w-6 h-6 rounded-full flex items-center justify-center bg-[rgba(255,255,250,0.06)] border border-[rgba(255,255,250,0.15)] shadow-[0_0_8px_rgba(255,255,250,0.1)]">
-        <span className="text-[11px] font-medium text-[rgba(255,255,250,0.7)]">
+      <div className="w-6 h-6 rounded-full flex items-center justify-center bg-[rgb(var(--fg)_/_0.06)] border border-[rgb(var(--fg)_/_0.15)] shadow-[0_0_8px_rgb(var(--fg)_/_0.1)]">
+        <span className="text-[11px] font-medium text-[rgb(var(--fg)_/_0.7)]">
           {index + 1}
         </span>
       </div>
@@ -76,10 +76,10 @@ function Connector({ leftState, rightState }: ConnectorProps) {
   let className = "w-4 h-[1px] flex-shrink-0 ";
 
   if (leftState === "done" && rightState === "done") {
-    className += "bg-[rgba(255,255,250,0.15)]";
+    className += "bg-[rgb(var(--fg)_/_0.15)]";
   } else if (leftState === "done" && rightState === "current") {
     className +=
-      "bg-gradient-to-r from-[rgba(255,255,250,0.15)] to-[rgba(255,255,250,0.06)]";
+      "bg-gradient-to-r from-[rgb(var(--fg)_/_0.15)] to-[rgb(var(--fg)_/_0.06)]";
   } else {
     className += "bg-border-subtle";
   }
@@ -122,9 +122,9 @@ export function ProcessingView({ meetingId }: ProcessingViewProps) {
                   <span
                     className={`text-[10px] ${
                       state === "current"
-                        ? "text-[rgba(255,255,250,0.7)]"
+                        ? "text-[rgb(var(--fg)_/_0.7)]"
                         : state === "done"
-                          ? "text-[rgba(255,255,250,0.4)]"
+                          ? "text-[rgb(var(--fg)_/_0.4)]"
                           : "text-text-muted"
                     }`}
                   >
@@ -157,7 +157,7 @@ export function ProcessingView({ meetingId }: ProcessingViewProps) {
           {/* Progress bar */}
           <div className="w-full h-1 bg-surface rounded-full overflow-hidden">
             <div
-              className="h-full rounded-full bg-gradient-to-r from-[rgba(255,255,250,0.2)] to-[rgba(255,255,250,0.5)] transition-all duration-500 ease-out"
+              className="h-full rounded-full bg-gradient-to-r from-[rgb(var(--fg)_/_0.2)] to-[rgb(var(--fg)_/_0.5)] transition-all duration-500 ease-out"
               style={{ width: `${Math.min(100, progress.percent)}%` }}
             />
           </div>

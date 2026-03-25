@@ -1,4 +1,4 @@
-import { useRef, useState, useCallback } from "react";
+import { useRef, useState, useCallback, useEffect } from "react";
 import { Music, Upload, X, Play } from "lucide-react";
 import type { Meeting, Recording } from "../../types";
 import {
@@ -6,8 +6,10 @@ import {
   useDeleteRecording,
   useStartProcessing,
 } from "../../hooks/use-meetings";
+import { useSettings } from "../../contexts/settings";
 
 const ACCEPTED_TYPES = ".mp3,.wav,.m4a,.aac,.ogg,.flac,.wma,.webm";
+const ACCEPTED_EXTENSIONS = new Set(ACCEPTED_TYPES.split(","));
 const MAX_RECORDINGS = 10;
 
 function formatFileSize(bytes: number): string {
@@ -90,6 +92,7 @@ export function RecordingManager({ meeting }: RecordingManagerProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const uploadMutation = useUploadRecording(meeting.id);
   const startMutation = useStartProcessing(meeting.id);
+  const { settings } = useSettings();
   const [dragOver, setDragOver] = useState(false);
 
   const remaining = MAX_RECORDINGS - meeting.recordings.length;
@@ -136,6 +139,23 @@ export function RecordingManager({ meeting }: RecordingManagerProps) {
     [handleFiles],
   );
 
+  // 剪贴板粘贴上传
+  useEffect(() => {
+    if (!canUpload) return;
+    const onPaste = (e: ClipboardEvent) => {
+      const files = Array.from(e.clipboardData?.files ?? []).filter((f) => {
+        const ext = "." + f.name.split(".").pop()?.toLowerCase();
+        return ACCEPTED_EXTENSIONS.has(ext);
+      });
+      if (files.length > 0) {
+        e.preventDefault();
+        handleFiles(files);
+      }
+    };
+    document.addEventListener("paste", onPaste);
+    return () => document.removeEventListener("paste", onPaste);
+  }, [canUpload, handleFiles]);
+
   return (
     <div className="p-6 max-w-[640px] mx-auto space-y-5">
       {/* Title area */}
@@ -167,8 +187,8 @@ export function RecordingManager({ meeting }: RecordingManagerProps) {
             border-[1.5px] border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors
             ${
               dragOver
-                ? "border-[rgba(255,255,250,0.25)] bg-[rgba(255,255,250,0.01)]"
-                : "border-[rgba(255,255,250,0.1)] hover:border-[rgba(255,255,250,0.2)] hover:bg-[rgba(255,255,250,0.01)]"
+                ? "border-[rgb(var(--fg)_/_0.25)] bg-[rgb(var(--fg)_/_0.01)]"
+                : "border-[rgb(var(--fg)_/_0.1)] hover:border-[rgb(var(--fg)_/_0.2)] hover:bg-[rgb(var(--fg)_/_0.01)]"
             }
           `}
         >
@@ -179,7 +199,7 @@ export function RecordingManager({ meeting }: RecordingManagerProps) {
           <div className="text-[13px] text-text-secondary">
             {uploadMutation.isPending
               ? "上传中..."
-              : "拖放录音文件，或点击选择"}
+              : "拖放录音文件、粘贴、或点击选择"}
           </div>
           <div className="text-[11px] text-text-muted mt-1">
             MP3 / WAV / M4A / AAC &middot; 最大 2GB &middot; 还可添加{" "}
@@ -198,14 +218,19 @@ export function RecordingManager({ meeting }: RecordingManagerProps) {
 
       {/* Start button */}
       <button
-        onClick={() => startMutation.mutate(undefined)}
+        onClick={() => startMutation.mutate({
+          chat_model: settings.chatModel,
+          transcription_model: settings.transcriptionModel,
+          ...(settings.apiKey ? { api_key: settings.apiKey } : {}),
+          ...(settings.baseUrl ? { base_url: settings.baseUrl } : {}),
+        })}
         disabled={!canStart || startMutation.isPending}
         className={`
           w-full flex items-center justify-center gap-2 px-4 py-3 rounded-sm text-[14px] font-medium transition-all
           ${
             canStart
-              ? "bg-[rgba(255,255,250,0.06)] text-cream border border-border-subtle hover:bg-[rgba(255,255,250,0.1)]"
-              : "bg-[rgba(255,255,250,0.02)] text-text-muted border border-border-subtle opacity-50 cursor-not-allowed"
+              ? "bg-[rgb(var(--fg)_/_0.06)] text-cream border border-border-subtle hover:bg-[rgb(var(--fg)_/_0.1)]"
+              : "bg-[rgb(var(--fg)_/_0.02)] text-text-muted border border-border-subtle opacity-50 cursor-not-allowed"
           }
         `}
       >

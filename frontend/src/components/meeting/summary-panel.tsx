@@ -20,7 +20,7 @@ export function SummaryPanel({ summary }: SummaryPanelProps) {
       {!summary ? (
         <div className="text-[12px] text-text-muted">暂无纪要</div>
       ) : (
-        <div className="bg-[rgba(255,255,255,0.015)] border border-border-subtle rounded-lg p-5 space-y-5">
+        <div className="bg-[rgb(var(--neutral)_/_0.015)] border border-border-subtle rounded-lg p-5 space-y-5">
           {/* Summary text */}
           {summary.summary && (
             <p className="text-[13px] text-text-secondary leading-[1.8]">
@@ -52,9 +52,9 @@ export function SummaryPanel({ summary }: SummaryPanelProps) {
                 {summary.action_items.map((item, i) => (
                   <div key={i} className="flex items-start gap-2.5">
                     {/* Checkbox outline */}
-                    <div className="w-[13px] h-[13px] rounded-[2px] border border-[rgba(255,255,250,0.12)] shrink-0 mt-0.5" />
+                    <div className="w-[13px] h-[13px] rounded-[2px] border border-[rgb(var(--fg)_/_0.12)] shrink-0 mt-0.5" />
                     <div className="min-w-0">
-                      <span className="text-[11px] font-semibold text-[rgba(255,255,250,0.55)]">
+                      <span className="text-[11px] font-semibold text-[rgb(var(--fg)_/_0.55)]">
                         {item.assignee}
                       </span>
                       <span className="text-[12px] text-text-secondary ml-1.5">

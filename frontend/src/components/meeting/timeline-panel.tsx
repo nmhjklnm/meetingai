@@ -36,7 +36,7 @@ export function TimelinePanel({ segments }: TimelinePanelProps) {
       {/* Timeline */}
       <div className="relative pl-4">
         {/* Vertical line */}
-        <div className="absolute left-[5px] top-1 bottom-1 w-px bg-[rgba(255,255,250,0.06)]" />
+        <div className="absolute left-[5px] top-1 bottom-1 w-px bg-[rgb(var(--fg)_/_0.06)]" />
 
         <div className="space-y-4">
           {timeline.map((entry, i) => (
@@ -45,14 +45,14 @@ export function TimelinePanel({ segments }: TimelinePanelProps) {
               <div
                 className={`absolute left-[-12px] top-[5px] w-[5px] h-[5px] rounded-full border ${
                   i === 0
-                    ? "bg-[rgba(255,255,250,0.5)] border-[rgba(255,255,250,0.15)]"
-                    : "bg-[rgba(255,255,250,0.1)] border-[rgba(255,255,250,0.15)]"
+                    ? "bg-[rgb(var(--fg)_/_0.5)] border-[rgb(var(--fg)_/_0.15)]"
+                    : "bg-[rgb(var(--fg)_/_0.1)] border-[rgb(var(--fg)_/_0.15)]"
                 }`}
               />
 
               <div className="min-w-0">
                 {/* Time badge */}
-                <span className="text-[11px] font-semibold text-[rgba(255,255,250,0.35)] tabular-nums">
+                <span className="text-[11px] font-semibold text-[rgb(var(--fg)_/_0.35)] tabular-nums">
                   {formatTime(entry.time)}
                 </span>
                 {/* Text */}

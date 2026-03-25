@@ -17,7 +17,7 @@ export function SearchInput({
   return (
     <div
       className={cn(
-        "bg-[rgba(255,255,255,0.02)] border border-border-subtle rounded-sm px-3 py-1.5 flex items-center gap-2 text-[12px] text-text-muted focus-within:border-border-focus transition-colors",
+        "bg-surface border border-border-subtle rounded-sm px-3 py-1.5 flex items-center gap-2 text-[12px] text-text-muted focus-within:border-border-focus transition-colors",
         className,
       )}
     >

@@ -101,14 +101,14 @@ def _get_audio_duration(wav_path: str) -> float:
         return wf.getnframes() / wf.getframerate()
 
 
-def _merge_recordings(recordings: list, output_path: str) -> str:
+def _merge_recordings(file_paths: list[str], output_path: str) -> str:
     """
     将一条或多条录音合并为单个 16kHz 单声道 WAV。
     单条录音直接格式转换；多条使用 ffmpeg concat demuxer。
     """
-    if len(recordings) == 1:
+    if len(file_paths) == 1:
         subprocess.run(
-            ["ffmpeg", "-y", "-i", recordings[0].file_path,
+            ["ffmpeg", "-y", "-i", file_paths[0],
              "-ar", "16000", "-ac", "1", "-acodec", "pcm_s16le", output_path],
             check=True, capture_output=True,
         )
@@ -119,8 +119,8 @@ def _merge_recordings(recordings: list, output_path: str) -> str:
     os.close(fd)
     try:
         with open(list_file, "w") as f:
-            for rec in recordings:
-                safe_path = rec.file_path.replace("'", "'\\''")
+            for fpath in file_paths:
+                safe_path = fpath.replace("'", "'\\''")
                 f.write(f"file '{safe_path}'\n")
         subprocess.run(
             ["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", list_file,
@@ -172,7 +172,15 @@ def _call_diarization(
 # ── 主 Celery 任务 ─────────────────────────────────────────────────────────────
 
 @celery_app.task(bind=True, name="backend.worker.tasks.process_meeting_task")
-def process_meeting_task(self, meeting_id: str, context: str | None = None) -> dict:
+def process_meeting_task(
+    self,
+    meeting_id: str,
+    context: str | None = None,
+    chat_model: str | None = None,
+    transcription_model: str | None = None,
+    api_key: str | None = None,
+    base_url: str | None = None,
+) -> dict:
     """
     主处理任务。6 步 Pipeline，进度实时写入 Redis。
     从数据库读取 meeting.recordings，合并后依次执行 VAD → 说话人分离 → 转写 → NLP → 保存。
@@ -185,7 +193,7 @@ def process_meeting_task(self, meeting_id: str, context: str | None = None) -> d
     TOTAL_STEPS = 6
 
     def _fail(msg: str):
-        _report(meeting_id, 0, TOTAL_STEPS, "error", f"失败: {msg}", "failed")
+        _report(meeting_id, 1, TOTAL_STEPS, "error", f"失败: {msg}", "failed")
         factory = get_session_factory()
         db = factory()
         try:
@@ -214,6 +222,9 @@ def process_meeting_task(self, meeting_id: str, context: str | None = None) -> d
                 _fail("该会议没有上传录音文件")
                 return {"status": "failed", "reason": "no recordings"}
 
+            # 提取文件路径（避免 session 关闭后 DetachedInstanceError）
+            recording_paths = [r.file_path for r in recordings]
+
             meeting.status = "processing"
             db.commit()
         finally:
@@ -225,7 +236,7 @@ def process_meeting_task(self, meeting_id: str, context: str | None = None) -> d
         merged_wav = os.path.join(audio_dir, f"{meeting_id}_merged.wav")
 
         try:
-            _merge_recordings(recordings, merged_wav)
+            _merge_recordings(recording_paths, merged_wav)
         except subprocess.CalledProcessError as e:
             stderr = e.stderr.decode() if e.stderr else ""
             _fail(f"ffmpeg 合并/转换失败: {stderr[:200]}")
@@ -286,9 +297,9 @@ def process_meeting_task(self, meeting_id: str, context: str | None = None) -> d
         prompt = DEFAULT_PROMPT + f"\n补充背景：{context}" if context else DEFAULT_PROMPT
 
         transcriber = TranscriptionService(
-            base_url=settings.openai_base_url,
-            api_key=settings.openai_api_key,
-            model=settings.transcription_model,
+            base_url=base_url or settings.openai_base_url,
+            api_key=api_key or settings.openai_api_key,
+            model=transcription_model or settings.transcription_model,
             max_workers=settings.max_transcription_workers,
             prompt=prompt,
         )
@@ -327,9 +338,9 @@ def process_meeting_task(self, meeting_id: str, context: str | None = None) -> d
         summary_data: dict = {}
         if full_transcript.strip():
             nlp = NLPService(
-                base_url=settings.openai_base_url,
-                api_key=settings.openai_api_key,
-                model=settings.chat_model,
+                base_url=base_url or settings.openai_base_url,
+                api_key=api_key or settings.openai_api_key,
+                model=chat_model or settings.chat_model,
             )
             try:
                 summary_data = nlp.analyze(full_transcript)
@@ -366,13 +377,15 @@ def process_meeting_task(self, meeting_id: str, context: str | None = None) -> d
                     text=r.get("text", ""),
                 ))
 
-            # 批量插入 speakers
+            # 批量插入 speakers（初始显示名用中文"说话人 A"）
             unique_speakers = {r["speaker"] for r in transcribed}
             for spk in sorted(unique_speakers):
+                # "Speaker A" → "说话人 A"
+                display = spk.replace("Speaker ", "说话人 ") if spk.startswith("Speaker ") else spk
                 db.add(Speaker(
                     meeting_id=meeting_id,
                     speaker_id=spk,
-                    name=spk,
+                    name=display,
                 ))
 
             db.commit()
