@@ -9,8 +9,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
 COPY pyproject.toml uv.lock ./
-# Stub backend package so uv can resolve workspace without real backend code
-RUN mkdir -p backend && touch backend/__init__.py
+# Stubs so uv can resolve workspace — dependencies cached until pyproject.toml/uv.lock change
+RUN mkdir -p backend ml_services && touch backend/__init__.py ml_services/__init__.py
 RUN uv sync --no-dev
-# Only copy actual ml_services source (cheap layer, no dependency reinstall)
+# Copy actual source (cheap layer, no dependency reinstall)
+COPY backend/ ./backend/
 COPY ml_services/ ./ml_services/
