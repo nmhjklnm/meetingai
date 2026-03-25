@@ -20,6 +20,6 @@ Diarization Service — 说话人分离
   3. "resemblyzer" — 轻量 d-vector（速度最快，精度略低）
 """
 
-from .pipeline import DiarizationPipeline, diarize
+from .pipeline import DiarizationPipeline, DiarizedSegment
 
-__all__ = ["DiarizationPipeline", "diarize"]
+__all__ = ["DiarizationPipeline", "DiarizedSegment"]
