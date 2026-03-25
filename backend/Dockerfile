@@ -8,9 +8,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
-# PyTorch CPU-only 索引（省 ~1.8GB，该机器无 GPU）
-ENV UV_EXTRA_INDEX_URL=https://download.pytorch.org/whl/cpu
-
 COPY pyproject.toml uv.lock ./
 COPY backend/ ./backend/
 COPY ml_services/ ./ml_services/

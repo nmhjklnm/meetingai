@@ -50,7 +50,6 @@ build-backend = "hatchling.build"
 packages = ["backend", "ml_services"]
 
 [tool.uv]
-extra-index-url = ["https://download.pytorch.org/whl/cpu"]
 
 [[tool.uv.index]]
 name = "pytorch-cpu"
