@@ -20,12 +20,22 @@ export const meetingsApi = {
     return api.delete(`/meetings/${id}`).then(() => undefined);
   },
 
-  uploadRecording(meetingId: string, file: File): Promise<void> {
+  uploadRecording(
+    meetingId: string,
+    file: File,
+    onProgress?: (percent: number) => void,
+  ): Promise<void> {
     const form = new FormData();
     form.append("file", file);
     return api
       .post(`/meetings/${meetingId}/recordings`, form, {
         headers: { "Content-Type": "multipart/form-data" },
+        timeout: 600_000,
+        onUploadProgress: onProgress
+          ? (e) => {
+              if (e.total) onProgress(Math.round((e.loaded * 100) / e.total));
+            }
+          : undefined,
       })
       .then(() => undefined);
   },

@@ -43,10 +43,14 @@ export function useDeleteMeeting() {
   });
 }
 
-export function useUploadRecording(meetingId: string) {
+export function useUploadRecording(
+  meetingId: string,
+  onProgress?: (percent: number) => void,
+) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (file: File) => meetingsApi.uploadRecording(meetingId, file),
+    mutationFn: (file: File) =>
+      meetingsApi.uploadRecording(meetingId, file, onProgress),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["meeting", meetingId] });
       qc.invalidateQueries({ queryKey: ["meetings"] });

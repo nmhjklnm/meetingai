@@ -323,16 +323,6 @@ async def upload_recording(
             detail=f"每个会议最多 {settings.max_recordings_per_meeting} 个录音",
         )
 
-    # Read file content
-    content = await file.read()
-
-    # Validate file size
-    if len(content) > settings.max_upload_bytes:
-        raise HTTPException(
-            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            detail="文件超过 2GB 限制",
-        )
-
     # Determine filename and save path
     original_name = file.filename or "recording"
     filename = original_name
@@ -350,9 +340,23 @@ async def upload_recording(
             file_path = meeting_dir / filename
             counter += 1
 
-    # Save file
+    # Stream file to disk in chunks (avoids loading entire file into memory)
+    total_size = 0
+    chunk_size = 1024 * 1024  # 1 MB
     async with aiofiles.open(file_path, "wb") as f:
-        await f.write(content)
+        while True:
+            chunk = await file.read(chunk_size)
+            if not chunk:
+                break
+            total_size += len(chunk)
+            if total_size > settings.max_upload_bytes:
+                await f.close()
+                file_path.unlink(missing_ok=True)
+                raise HTTPException(
+                    status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                    detail="文件超过 2GB 限制",
+                )
+            await f.write(chunk)
 
     # Get audio duration via ffprobe
     duration = _get_duration_ffprobe(str(file_path))
@@ -366,7 +370,7 @@ async def upload_recording(
         meeting_id=meeting_id,
         filename=filename,
         file_path=str(file_path),
-        file_size=len(content),
+        file_size=total_size,
         duration=duration,
         order=new_order,
     )
