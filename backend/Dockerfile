@@ -2,13 +2,15 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# 国内 Debian 镜像 + 安装 ffmpeg
+RUN sed -i 's|deb.debian.org|mirrors.tuna.tsinghua.edu.cn|g' /etc/apt/sources.list.d/debian.sources \
+    && apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg curl \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
-# 国内 PyPI 镜像加速（PyTorch 等大包从清华源下载）
+# 国内 PyPI 镜像
 ENV UV_INDEX_URL=https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
 
 COPY pyproject.toml uv.lock ./
