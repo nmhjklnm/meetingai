@@ -1,0 +1,146 @@
+services:
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_URL: /api
+    ports:
+      - "${FRONTEND_PORT:-9080}:80"
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+  api:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    ports:
+      - "${API_PORT:-9000}:8000"
+    environment:
+      - OPENAI_BASE_URL=${OPENAI_BASE_URL}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - TRANSCRIPTION_MODEL=${TRANSCRIPTION_MODEL:-gpt-4o-transcribe}
+      - CHAT_MODEL=${CHAT_MODEL:-gpt-4o}
+      - DATABASE_URL=postgresql://meetingai:${POSTGRES_PASSWORD:-meetingai_secret}@postgres:5432/meetingai
+      - REDIS_URL=redis://redis:6379/0
+      - AUDIO_DIR=/app/data/audio
+      - MODELSCOPE_CACHE=/app/models_cache
+      - VAD_SERVICE_URL=http://vad:8001
+      - DIARIZATION_SERVICE_URL=http://diarization:8002
+    volumes:
+      - audio-data:/app/data/audio
+      - venv-api:/app/.venv
+      - models-cache:/app/models_cache
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 90s
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    command: uv run celery -A backend.worker.tasks worker --loglevel=info --concurrency=4
+    environment:
+      - OPENAI_BASE_URL=${OPENAI_BASE_URL}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - TRANSCRIPTION_MODEL=${TRANSCRIPTION_MODEL:-gpt-4o-transcribe}
+      - CHAT_MODEL=${CHAT_MODEL:-gpt-4o}
+      - DATABASE_URL=postgresql://meetingai:${POSTGRES_PASSWORD:-meetingai_secret}@postgres:5432/meetingai
+      - REDIS_URL=redis://redis:6379/0
+      - AUDIO_DIR=/app/data/audio
+      - MODELSCOPE_CACHE=/app/models_cache
+      - VAD_SERVICE_URL=http://vad:8001
+      - DIARIZATION_SERVICE_URL=http://diarization:8002
+    volumes:
+      - audio-data:/app/data/audio
+      - venv-worker:/app/.venv
+      - models-cache:/app/models_cache
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  vad:
+    build:
+      context: .
+      dockerfile: ml_services/Dockerfile
+    command: uv run uvicorn ml_services.vad_service:app --host 0.0.0.0 --port 8001
+    environment:
+      - MODELSCOPE_CACHE=/app/models_cache
+    volumes:
+      - models-cache:/app/models_cache
+      - venv-vad:/app/.venv
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 180s
+    restart: unless-stopped
+
+  diarization:
+    build:
+      context: .
+      dockerfile: ml_services/Dockerfile
+    command: uv run uvicorn ml_services.diarization_service:app --host 0.0.0.0 --port 8002
+    environment:
+      - MODELSCOPE_CACHE=/app/models_cache
+    volumes:
+      - models-cache:/app/models_cache
+      - venv-diar:/app/.venv
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8002/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 180s
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_USER=meetingai
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-meetingai_secret}
+      - POSTGRES_DB=meetingai
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U meetingai"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  postgres-data:
+  redis-data:
+  audio-data:
+  models-cache:
+  venv-api:
+  venv-worker:
+  venv-vad:
+  venv-diar:
