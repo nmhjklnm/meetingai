@@ -30,7 +30,6 @@ services:
       - DIARIZATION_SERVICE_URL=http://diarization:8002
     volumes:
       - audio-data:/app/data/audio
-      - venv-api:/app/.venv
       - models-cache:/app/models_cache
     depends_on:
       postgres:
@@ -42,7 +41,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 90s
+      start_period: 30s
     restart: unless-stopped
 
   worker:
@@ -63,7 +62,6 @@ services:
       - DIARIZATION_SERVICE_URL=http://diarization:8002
     volumes:
       - audio-data:/app/data/audio
-      - venv-worker:/app/.venv
       - models-cache:/app/models_cache
     depends_on:
       postgres:
@@ -81,7 +79,6 @@ services:
       - MODELSCOPE_CACHE=/app/models_cache
     volumes:
       - models-cache:/app/models_cache
-      - venv-vad:/app/.venv
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
       interval: 10s
@@ -99,7 +96,6 @@ services:
       - MODELSCOPE_CACHE=/app/models_cache
     volumes:
       - models-cache:/app/models_cache
-      - venv-diar:/app/.venv
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8002/health"]
       interval: 10s
@@ -140,7 +136,3 @@ volumes:
   redis-data:
   audio-data:
   models-cache:
-  venv-api:
-  venv-worker:
-  venv-vad:
-  venv-diar:
