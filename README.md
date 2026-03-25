@@ -1,184 +1,157 @@
 # Meeting Transcriber
 
-> 会议语音转写 + 说话人分离 + 智能摘要服务
-> 对标腾讯会议 / 飞书会议 / 钉钉会议的核心录音转录能力
+> 会议语音转写 + 说话人分离 + AI 智能摘要 — 上传录音，自动生成逐字稿、Topic 时间轴、会议纪要和行动项。
 
----
+## 预览
 
-## 功能概览
+**深色主题 — 会议结果**
+![meeting-dark](docs/screenshots/meeting-result-dark.png)
 
-| 功能 | 状态 | 说明 |
-|------|------|------|
-| 语音转文字 | ✅ 已实现 | GPT-4o-transcribe，支持中英文 |
-| 说话人分离 | 🔄 升级中 | ECAPA-TDNN 替代手工 MFCC（见下） |
-| 摘要 & 行动项 | 🚧 规划中 | GPT-4o NLP 分析 |
-| React 前端 | 🚧 规划中 | 上传、实时转写、查看结果 |
-| REST API | 🚧 规划中 | FastAPI + WebSocket 进度推送 |
-| 说话人姓名对齐 | 🚧 规划中 | 将 Speaker A/B 对齐到真实姓名 |
+**浅色主题 — 会议结果**
+![meeting-light](docs/screenshots/meeting-result-light.png)
 
----
+<details>
+<summary>更多截图</summary>
 
-## 系统架构
+**设置 — 通用（API 配置 / 主题切换）**
+![settings-general](docs/screenshots/settings-general-dark.png)
+
+**设置 — 模型（转录 / 摘要模型选择 + 可用性检测）**
+![settings-models](docs/screenshots/settings-models-dark.png)
+
+</details>
+
+## 核心功能
+
+| 功能 | 说明 |
+|------|------|
+| 语音转文字 | GPT-4o Transcribe / Whisper，支持中英文混合 |
+| 说话人分离 | FunASR FSMN-VAD + CAM++ 说话人聚类 |
+| Topic 时间轴 | AI 提炼会议主线，展示每个阶段讨论的核心议题 |
+| 智能摘要 | 一键生成纪要、关键词、行动项，支持独立重新生成 |
+| 逐字稿 | 按说话人分段，带时间戳，支持全文搜索 |
+| 说话人编辑 | 重命名说话人标签（Speaker A → 张明） |
+| 导出 | SRT 字幕 / TXT 纯文本 / Markdown 会议纪要 |
+| 深色/浅色主题 | CSS 变量驱动，一键切换 |
+| 模型可配置 | 前端可覆盖转录模型、摘要模型、API Key、Base URL |
+| 模型检测 | 切换模型时自动验证可用性 |
+| 剪贴板上传 | Ctrl/Cmd+V 直接粘贴音频文件 |
+| 实时进度 | WebSocket 推送 6 步处理进度 + ETA |
+
+## 架构
 
 ```
-┌──────────────────────────────────────────────────────┐
-│                   React 前端 (Vite)                   │
-│  上传音频 → 实时进度条 → 转录查看 → 摘要/行动项        │
-└──────────────────────┬───────────────────────────────┘
-                       │ HTTP / WebSocket
-┌──────────────────────▼───────────────────────────────┐
-│             FastAPI Gateway (Python)                   │
-└──────┬───────────────┬──────────────────┬────────────┘
-       │               │                  │
-┌──────▼──────┐ ┌──────▼──────┐  ┌───────▼──────────┐
-│ VAD Service │ │ Diarization │  │ Transcription    │
-│ Silero VAD  │ │ ECAPA-TDNN  │  │ GPT-4o-transcribe│
-│ (本地推理)  │ │ (本地推理)  │  │ (外部 API)       │
-└─────────────┘ └─────────────┘  └──────────────────┘
-                                          │
-                               ┌──────────▼─────────┐
-                               │   NLP Service       │
-                               │  摘要/关键词/行动项  │
-                               │   (GPT-4o)          │
-                               └────────────────────┘
+┌──────────┐    ┌───────────┐    ┌──────────────┐
+│ Frontend │───▸│  FastAPI   │───▸│ Celery Worker│
+│ React/TS │◂──▸│  REST+WS   │    │  6-step pipe │
+└──────────┘    └─────┬─────┘    └──┬───┬───┬───┘
+                      │             │   │   │
+                ┌─────▾─────┐  ┌───▾┐ ┌▾┐ ┌▾──────┐
+                │ SQLite/PG │  │VAD │ │D│ │OpenAI  │
+                │  + Redis  │  │8001│ │8002│ API   │
+                └───────────┘  └────┘ └──┘ └───────┘
+                                 FunASR    CAM++
 ```
 
-**存储层：**
-- PostgreSQL — 会议记录、转录结果、用户数据
-- Redis — Celery 任务队列、进度缓存
-- 本地文件系统 / S3 — 音频文件存储
+**处理 Pipeline（6 步）**
 
----
+1. **合并** — ffmpeg 转 16kHz 单声道 WAV
+2. **VAD** — FSMN-VAD 检测语音段
+3. **说话人分离** — CAM++ 嵌入 + KMeans 聚类
+4. **转写** — GPT-4o Transcribe 并发转写（Semaphore 控制）
+5. **NLP** — GPT-4o 生成摘要 / 时间轴 / 关键词 / 行动项
+6. **保存** — 写入数据库，推送完成状态
 
-## 说话人识别升级（核心）
+## 快速开始
 
-### 当前问题
-手工 MFCC 特征 → KMeans 聚类，**准确率仅 30-40%**。
+### 前置依赖
 
-根本原因：MFCC 是 1970 年代为语音识别（"说了什么"）设计的特征，无法可靠区分不同人的音色。
+- Python 3.11+ / [uv](https://github.com/astral-sh/uv)
+- Node.js 18+ / npm
+- Redis（`brew install redis && brew services start redis`）
+- ffmpeg（`brew install ffmpeg`）
+- OpenAI API Key（支持代理 / 兼容接口）
 
-### 升级方案：ECAPA-TDNN
-
-| 对比项 | 旧方案 | 新方案 |
-|-------|--------|--------|
-| 特征 | 手工 MFCC + F0 统计（249维） | ECAPA-TDNN 神经网络（192维） |
-| 训练数据 | 无（纯手工） | VoxCeleb（1M+ 语音段，7000+ 说话人）|
-| 聚类 | KMeans（欧氏距离）| AHC + 余弦距离 + 自动阈值 |
-| 准确率 | 30-40% | **85-90%** |
-
-详见 [`docs/diarization-upgrade.md`](docs/diarization-upgrade.md)
-
----
-
-## 快速开始（当前版本）
-
-### 环境要求
-
-- Python ≥ 3.11
-- [uv](https://docs.astral.sh/uv/) 包管理器
-- ffmpeg
+### 本地开发
 
 ```bash
-# 安装 uv（如未安装）
-curl -LsSf https://astral.sh/uv/install.sh | sh
-
-# 安装依赖
-uv sync
-
-# 复制环境变量
+# 1. 克隆 & 配置
+git clone <repo-url> && cd meetingai
 cp .env.example .env
-# 编辑 .env，填入 OPENAI_API_KEY 和 OPENAI_BASE_URL
+# 编辑 .env 填写 OPENAI_API_KEY（必须）和 OPENAI_BASE_URL（可选）
+
+# 2. 启动后端（ML 服务 + Worker + API）
+./start_local.sh
+
+# 3. 启动前端（另开终端）
+cd frontend && npm install && npm run dev
 ```
 
-### 转写单个音频
+打开 http://localhost:3000 即可使用。
+
+### Docker 部署
 
 ```bash
-uv run python transcribe_diarize.py 会议录音.mp3 --parallel --workers 20
+cp .env.example .env  # 配置 API Key
+docker compose up --build -d
 ```
 
-### 转写多文件会议（自动拼接）
-
-```bash
-uv run python transcribe_diarize.py part1.m4a part2.m4a part3.m4a \
-  --parallel --workers 20 --output 完整会议
-```
-
-### 输出文件
-
-| 文件 | 格式 | 说明 |
-|------|------|------|
-| `xxx_transcript.srt` | SRT 字幕 | 含说话人标签和时间轴 |
-| `xxx_transcript.txt` | 纯文本 | 易于阅读的会议记录 |
-| `xxx_transcript.json` | JSON | 结构化数据，含所有元信息 |
-
----
+访问 http://localhost:3000。
 
 ## 项目结构
 
 ```
-.
-├── transcribe_diarize.py        # 当前可用的命令行工具（v3）
-├── pyproject.toml               # Python 依赖（uv 管理）
-│
-├── backend/                     # 新架构后端（重构中）
-│   ├── api/                     # FastAPI 入口和路由
-│   ├── services/
-│   │   ├── vad/                 # Silero VAD
-│   │   ├── diarization/         # ECAPA-TDNN 说话人分离
-│   │   ├── transcription/       # 转写服务（GPT-4o-transcribe）
-│   │   └── nlp/                 # 摘要、行动项提取
-│   ├── models/                  # 数据库模型（SQLAlchemy）
-│   └── worker/                  # Celery 异步任务
-│
-├── frontend/                    # React + TypeScript 前端（规划中）
-│
-├── docs/
-│   └── diarization-upgrade.md  # 说话人识别升级技术文档
-│
-├── docker-compose.yml           # 完整服务编排
-└── .env.example                 # 环境变量模板
+meetingai/
+├── backend/
+│   ├── api/              # FastAPI 路由（REST + WebSocket）
+│   │   └── routes/       # meetings / system / websocket
+│   ├── core/             # 配置、数据库、Redis
+│   ├── models/           # SQLAlchemy 模型
+│   ├── services/         # ML 服务客户端
+│   │   ├── transcription/  # OpenAI 转写
+│   │   ├── diarization/    # 说话人分离
+│   │   ├── nlp/            # GPT 摘要生成
+│   │   └── vad/            # 语音活动检测
+│   └── worker/           # Celery 异步任务
+├── ml_services/          # 独立 ML 微服务（VAD + 说话人分离）
+├── frontend/
+│   └── src/
+│       ├── components/   # UI 组件（layout / meeting / ui）
+│       ├── contexts/     # Theme + Settings providers
+│       ├── hooks/        # React Query hooks
+│       ├── pages/        # 会议页 + 设置页
+│       └── api/          # Axios 客户端
+├── docker-compose.yml
+├── start_local.sh        # 一键本地启动
+└── pyproject.toml
 ```
 
----
+## API 概览
 
-## 开发路线图
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| POST | `/api/meetings` | 创建会议 |
+| GET | `/api/meetings` | 会议列表 |
+| GET | `/api/meetings/{id}` | 会议详情 |
+| PATCH | `/api/meetings/{id}` | 更新标题 |
+| DELETE | `/api/meetings/{id}` | 删除会议 |
+| POST | `/api/meetings/{id}/recordings` | 上传录音 |
+| POST | `/api/meetings/{id}/process` | 开始处理 |
+| POST | `/api/meetings/{id}/regenerate-timeline` | 重新生成时间轴 |
+| POST | `/api/meetings/{id}/regenerate-summary` | 重新生成纪要 |
+| PATCH | `/api/meetings/{id}/speakers` | 重命名说话人 |
+| GET | `/api/meetings/{id}/export/{format}` | 导出（srt/txt/summary） |
+| WS | `/ws/meetings/{id}/progress` | 实时进度推送 |
+| POST | `/api/check-model` | 检测模型可用性 |
+| GET | `/api/progress/{id}` | 查询任务进度 |
 
-### v1（当前）：命令行工具
-- [x] VAD 分割（能量阈值）
-- [x] 说话人分离（MFCC + KMeans）
-- [x] 并发转写（GPT-4o-transcribe）
-- [x] SRT / TXT / JSON 输出
-- [x] 多文件拼接
+## 技术栈
 
-### v2（进行中）：算法升级
-- [ ] 集成 Resemblyzer（快速验证）
-- [ ] 集成 Silero VAD
-- [ ] 集成 ECAPA-TDNN（目标：85%+ 说话人准确率）
-- [ ] 集成 pyannote.audio（可选）
+**后端:** FastAPI, Celery, SQLAlchemy, Redis, FunASR, OpenAI API
 
-### v3（规划中）：服务化
-- [ ] FastAPI 后端 API
-- [ ] PostgreSQL 数据持久化
-- [ ] Celery 异步任务队列
-- [ ] WebSocket 实时进度
-- [ ] React 前端
+**前端:** React 18, TypeScript, TanStack Query, Tailwind CSS, Vite
 
-### v4（规划中）：智能分析
-- [ ] GPT-4o 会议摘要
-- [ ] 行动项自动提取
-- [ ] 说话人姓名对齐
-- [ ] 多语言支持
-
----
-
-## 贡献指南
-
-1. Fork 本仓库
-2. 创建功能分支：`git checkout -b feature/ecapa-diarization`
-3. 查看对应的 TODO 文件（`docs/diarization-upgrade.md`）
-4. 提交 PR，描述改进和测试结果
-
----
+**ML:** FSMN-VAD (语音活动检测), CAM++ (说话人嵌入), KMeans (聚类)
 
 ## License
 
